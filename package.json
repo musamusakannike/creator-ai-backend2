@@ -4,7 +4,8 @@
   "description": "AI YouTube channel manager",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node-dev --respawn index.ts"
   },
   "author": "Musa Musa Kannike",
   "license": "ISC",
