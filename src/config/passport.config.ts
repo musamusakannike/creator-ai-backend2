@@ -14,17 +14,24 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        // Find or create the user
         let user = await User.findOne({ googleId: profile.id });
+
         if (!user) {
           user = new User({
-            email: profile.emails?.[0]?.value,
             googleId: profile.id,
+            email: profile.emails?.[0]?.value,
+            youtubeAccessToken: accessToken, // Save the access token
           });
-          await user.save();
+        } else {
+          // Update the user's access token if it exists
+          user.youtubeAccessToken = accessToken;
         }
-        done(null, user);
+
+        await user.save();
+        return done(null, user);
       } catch (error) {
-        done(error, false);
+        return done(error, false);
       }
     }
   )
