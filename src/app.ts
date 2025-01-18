@@ -1,5 +1,6 @@
 import express from "express";
 import morgan from "morgan";
+import cors from "cors";
 import dotenv from "dotenv";
 import passport from "./config/passport.config";
 import session from "express-session";
@@ -13,6 +14,7 @@ connectDB();
 const app = express();
 
 app.use(morgan("dev"));
+app.use(cors());
 app.use(express.json());
 
 // Session setup
