@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import passport from "./config/passport.config";
 import session from "express-session";
 import authRoutes from "./routes/auth.route";
+import youtubeRoutes from "./routes/youtube.route";
 import connectDB from "./config/db.config";
 
 dotenv.config();
@@ -28,5 +29,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use("/auth", authRoutes);
+app.use("/youtube", youtubeRoutes);
 
 export default app;

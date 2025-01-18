@@ -8,3 +8,5 @@ router.get(
   authenticate,
   getDashboardStats
 );
+
+export default router;
