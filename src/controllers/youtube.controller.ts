@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { google } from "googleapis";
+import { google, youtube_v3 } from "googleapis";
 
 export const getDashboardStats = async (
   req: Request,
@@ -122,3 +122,118 @@ export const getDashboardStats = async (
     next(error); // Pass the error to the next middleware
   }
 };
+
+
+export const getAllChannelContent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = (req as any).user
+
+    if (!user.youtubeAccessToken) {
+      res.status(400).json({ message: "No YouTube access token found" })
+      return
+    }
+
+    const oauth2Client = new google.auth.OAuth2()
+    oauth2Client.setCredentials({
+      access_token: user.youtubeAccessToken,
+    })
+
+    const youtube = google.youtube({ version: "v3", auth: oauth2Client })
+
+    // Validate query parameters
+    const contentType = req.query.type as string | undefined
+    const pageToken = req.query.pageToken ? String(req.query.pageToken) : undefined
+
+    // Fetch channel details to ensure we're using the correct channel ID
+    const channelResponse = await youtube.channels.list({
+      part: ["snippet"],
+      mine: true,
+    })
+
+    const channel = channelResponse.data.items?.[0]
+    if (!channel || !channel.id) {
+      res.status(404).json({ message: "Channel not found" })
+      return
+    }
+
+    const channelId = channel.id
+    if (!contentType) {
+      res.status(400).json({ message: "Content type is required" })
+      return
+    }
+
+    let responseData: any[] = []
+
+    if (contentType === "videos" || contentType === "shorts" || contentType === "liveStreams") {
+      const videoResponse = await youtube.search.list({
+        part: ["snippet"],
+        channelId,
+        maxResults: 10,
+        order: "date",
+        type: ["video"],
+        eventType: contentType === "liveStreams" ? "live" : undefined,
+        pageToken,
+      })
+
+      responseData = await Promise.all(
+        (videoResponse.data.items || []).map(async (video: youtube_v3.Schema$SearchResult) => {
+          const videoId = video.id?.videoId
+          if (!videoId) return null
+
+          const statsResponse = await youtube.videos.list({
+            part: ["statistics"],
+            id: [videoId],
+          })
+
+          const stats = statsResponse.data.items?.[0]?.statistics || {}
+          const item = {
+            title: video.snippet?.title || "",
+            thumbnail: video.snippet?.thumbnails?.default?.url || "",
+            type: contentType === "liveStreams" ? "live" : "video",
+            views: stats.viewCount || "0",
+            likes: stats.likeCount || "0",
+            comments: stats.commentCount || "0",
+            publishedAt: video.snippet?.publishedAt || "",
+          }
+
+          return contentType === "shorts" ? (item.title.toLowerCase().includes("shorts") ? item : null) : item
+        }),
+      )
+
+      responseData = responseData.filter(Boolean)
+
+      res.json({
+        content: responseData,
+        nextPageToken: videoResponse.data.nextPageToken || null,
+        prevPageToken: videoResponse.data.prevPageToken || null,
+      })
+    } else if (contentType === "posts") {
+      const postsResponse = await youtube.search.list({
+        part: ["snippet"],
+        channelId,
+        maxResults: 10,
+        type: ["video"],
+        pageToken,
+      })
+
+      responseData = (postsResponse.data.items || []).map((post: youtube_v3.Schema$SearchResult) => ({
+        title: post.snippet?.title || "",
+        thumbnail: post.snippet?.thumbnails?.default?.url || "",
+        type: "post",
+        publishedAt: post.snippet?.publishedAt || "",
+      }))
+
+      res.json({
+        content: responseData,
+        nextPageToken: postsResponse.data.nextPageToken || null,
+        prevPageToken: postsResponse.data.prevPageToken || null,
+      })
+    } else {
+      res.status(400).json({ message: "Invalid content type" })
+    }
+  } catch (error) {
+    console.error("YouTube Channel Content Error:", error)
+    next(error)
+  }
+}
+
